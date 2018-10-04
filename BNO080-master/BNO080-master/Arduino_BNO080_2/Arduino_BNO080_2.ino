@@ -74,6 +74,11 @@ const uint8_t B1_rate            = B0_rate >> 8;                               /
 #define radtodeg                    (180.0f / PI)
 #define TCAADDR 0x70
 
+float quatI[6] = {0};
+float quatJ[6] = {0};
+float quatK[6] = {0};
+float quatReal[6] = {0};
+
 void tcaselect(uint8_t i) {
     //if (i > 7) return;
     Wire.beginTransmission(TCAADDR);
@@ -81,9 +86,6 @@ void tcaselect(uint8_t i) {
     Wire.endTransmission();
 }
 
-/*************************************
-                 SETUP
-*************************************/
 
 void setup() {
   Serial.begin(2000000);                  // 115200 baud
@@ -94,9 +96,8 @@ void setup() {
       tcaselect(i);
       Wire.beginTransmission(BNO_ADDRESS);
       while (Wire.endTransmission() != 0);         //wait until device is responding (32 kHz XTO running)
-      Serial.println("BNO found");
-   
-      delay(1000);                            //needed to accept feature command; minimum not tested
+      //Serial.println("BNO found");
+      delay(1000);                           //needed to accept feature command; minimum not tested
       set_feature_cmd_QUAT();                // set the required feature report data rate  are generated  at preset report interva 
       ME_cal(1,1,1,0);                       // switch autocal on @ booting (otherwise gyro is not on)
   }
@@ -108,13 +109,13 @@ void setup() {
                      LOOP
    *************************************/
 void loop() {
-    uint32_t t = millis();
+    //uint32_t t = millis();
     for (uint8_t i = 2; i < 8; i++) {
         tcaselect(i);
         //Serial.print(i);Serial.print(" ");
         //delay(100);
-        get_QUAT();                                                                    // get actual QUAT data (if new are available)    
-        if (millis() - plot_interval > 0){ 
+        get_QUAT(i);                                                                    // get actual QUAT data (if new are available)    
+        /*if (millis() - plot_interval > 0){ 
             //Serial.print ("S "); Serial.print (stat_);
             //Serial.print ("; E "); Serial.print (h_est + 0.05f,1);                   // including rounding
             Serial.print ("; q0 "); Serial.print (q0 + 0.00005f,4);                  // = qw (more digits to find out north direction (y axis N --> q0 = 1)
@@ -122,9 +123,10 @@ void loop() {
             Serial.print ("; q2 "); Serial.print (q2 + 0.0005f,3);
             Serial.print ("; q3 "); Serial.println (q3 + 0.0005f,3);
             plot_interval = millis();
-        }
+        }*/
     }
-    Serial.println(millis() - t);
+    listenForTrig();
+    //Serial.println(1000 / (millis() - t));
     //Serial.println();                       
 }
 
@@ -132,55 +134,89 @@ void loop() {
              Subroutines
 /*************************************/
 
-/*******************************************************************************************************************
-/* This code reads quaternions 
- * kind of reporting (quat_report) is defined above
- */
+//Unit responds with packet that contains the following:
+//shtpHeader[0:3]: First, a 4 byte header
+//shtpData[0:4]: Then a 5 byte timestamp of microsecond clicks since reading was taken
+//shtpData[5 + 0]: Then a feature report ID (0x01 for Accel, 0x05 for Rotation Vector)
+//shtpData[5 + 1]: Sequence number (See 6.5.18.2)
+//shtpData[5 + 2]: Status
+//shtpData[3]: Delay
+//shtpData[4:5]: i/accel x/gyro x/etc
+//shtpData[6:7]: j/accel y/gyro y/etc
+//shtpData[8:9]: k/accel z/gyro z/etc
+//shtpData[10:11]: real/gyro temp/etc
+//shtpData[12:13]: Accuracy estimate
 
-
-void get_QUAT(){                                                               
-    if (quat_report == 0x08 || quat_report == 0x29){
-      Wire.requestFrom(BNO_ADDRESS,21);
-      int i=0; 
-      while (Wire.available()){
-        cargo[i] = Wire.read();
-        i++;
-      }
+void get_QUAT(uint8_t i){                                                               
+    Wire.requestFrom(BNO_ADDRESS,23);
+    int j = 0; 
+    while (Wire.available()){
+        cargo[j] = Wire.read();
+        j++;
     }
-     
-    else{ 
-      Wire.requestFrom(BNO_ADDRESS,23);
-      int i=0; 
-        while (Wire.available()){
-          //Serial.print(".");
-          cargo[i] = Wire.read();
-          i++;
-        }
-        //Serial.println();
-    }
-    
-    if((cargo[9] == quat_report)){        //&& ((cargo[10]) == next_data_seqNum ) check for report and incrementing data seqNum
-        //next_data_seqNum = ++cargo[10];                                         // predict next data seqNum              
-        stat_ = cargo[11] & 0x03;                                                // bits 1:0 contain the status (0,1,2,3)  
-    
-        q1 = (((int16_t)cargo[14] << 8) | cargo[13] ); 
-        q2 = (((int16_t)cargo[16] << 8) | cargo[15] );
-        q3 = (((int16_t)cargo[18] << 8) | cargo[17] );
-        q0 = (((int16_t)cargo[20] << 8) | cargo[19] ); 
 
-        q0 *= QP(14); q1 *= QP(14); q2 *= QP(14); q3 *= QP(14);                  // apply Q point (quats are already unity vector)
+    //Check to see if this packet is a sensor reporting its data to us
+    if((cargo[9] == quat_report) && (cargo[2] == 0x03) && (cargo[4] == 0xFB)){    //  && ((cargo[10]) == next_data_seqNum ) check for report and incrementing data seqNum
+        //next_data_seqNum = ++cargo[10];                                           // predict next data seqNum              
+        stat_ = cargo[11] & 0x03;                                                 // bits 1:0 contain the status (0,1,2,3)  
+    
+        float qI = (((int16_t)cargo[14] << 8) | cargo[13] ); 
+        float qJ = (((int16_t)cargo[16] << 8) | cargo[15] );
+        float qK = (((int16_t)cargo[18] << 8) | cargo[17] );
+        float qReal = (((int16_t)cargo[20] << 8) | cargo[19] ); 
 
-       if (quat_report == 0x05 || quat_report == 0x09 || quat_report == 0x28 ){  // heading accurracy only in some reports available
-          h_est = (((int16_t)cargo[22] << 8) | cargo[21] );                        // heading accurracy estimation  
-          h_est *= QP(12);                                                         // apply Q point 
-          h_est *= radtodeg;                                                       // convert to degrees                
-       }
-//       Serial.print ("; q0 "); Serial.print (q0 + 0.00005f,4);                  // = qw (more digits to find out north direction (y axis N --> q0 = 1)
-//       Serial.print ("; q1 "); Serial.print (q1 + 0.0005f,3);
-//       Serial.print ("; q2 "); Serial.print (q2 + 0.0005f,3);
-//       Serial.print ("; q3 "); Serial.println (q3 + 0.0005f,3);
+        quatReal[i - 2] = qToFloat_(qReal, 14); //pow(2, 14 * -1);//QP(14); 
+        quatI[i - 2] = qToFloat_(qI, 14); //pow(2, 14 * -1);//QP(14); 
+        quatJ[i - 2] = qToFloat_(qJ, 14); //pow(2, 14 * -1);//QP(14); 
+        quatK[i - 2] = qToFloat_(qK, 14); //pow(2, 14 * -1);//QP(14);                  // apply Q point (quats are already unity vector)
+
+        //if (quat_report == 0x05){  // heading accurracy only in some reports available
+        h_est = (((int16_t)cargo[22] << 8) | cargo[21] );                        // heading accurracy estimation  
+        h_est *= QP(12);                                                         // apply Q point 
+        h_est *= radtodeg;                                                       // convert to degrees                
+        //}
     }
 }
+
+//Given a register value and a Q point, convert to float
+//See https://en.wikipedia.org/wiki/Q_(number_format)
+float qToFloat_(int16_t fixedPointValue, uint8_t qPoint){
+  float qFloat = fixedPointValue;
+  qFloat *= pow(2, qPoint * -1);
+  return (qFloat);
+}
+
+void listenForTrig(){
+    //int c = Serial.available();
+    //if( c > 0){
+        //char c = Serial.read();
+        //if(c == '*'){
+            /*String s = "$," +String(quatReal[0], 2) + "," + String(quatI[0], 2) + "," + String(quatJ[0], 2) + "," + String(quatK[0], 2);
+            for(uint8_t i = 0; i < 6; i++){
+                  s += "," + String(roll[i], 2); 
+            }
+            for(uint8_t i = 0; i < 6; i++){
+                  s += "," + String(yaw[i], 2);
+            }
+            s += "\r";*/
+            /*String s = "$," +String(quatReal[0], 2) + "," + String(quatI[0], 2) + "," + String(quatJ[0], 2) + "," + String(quatK[0], 2)
+                       + "," + String(quatReal[1], 2) + "," + String(quatI[1], 2) + "," + String(quatJ[1], 2) + "," + String(quatK[1], 2)
+                       + "," + String(quatReal[2], 2) + "," + String(quatI[2], 2) + "," + String(quatJ[2], 2) + "," + String(quatK[2], 2)
+                       + "," + String(quatReal[3], 2) + "," + String(quatI[3], 2) + "," + String(quatJ[3], 2) + "," + String(quatK[3], 2)
+                       + "," + String(quatReal[4], 2) + "," + String(quatI[4], 2) + "," + String(quatJ[4], 2) + "," + String(quatK[4], 2)
+                       + "," + String(quatReal[5], 2) + "," + String(quatI[5], 2) + "," + String(quatJ[5], 2) + "," + String(quatK[5], 2) + "\r\n";*/
+            String s = String(quatReal[0], 2) + "," + String(quatI[0], 2) + "," + String(quatJ[0], 2) + "," + String(quatK[0], 2)
+                       + "," + String(quatReal[1], 2) + "," + String(quatI[1], 2) + "," + String(quatJ[1], 2) + "," + String(quatK[1], 2)
+                       + "," + String(quatReal[2], 2) + "," + String(quatI[2], 2) + "," + String(quatJ[2], 2) + "," + String(quatK[2], 2)
+                       + "," + String(quatReal[3], 2) + "," + String(quatI[3], 2) + "," + String(quatJ[3], 2) + "," + String(quatK[3], 2)
+                       + "," + String(quatReal[4], 2) + "," + String(quatI[4], 2) + "," + String(quatJ[4], 2) + "," + String(quatK[4], 2)
+                       + "," + String(quatReal[5], 2) + "," + String(quatI[5], 2) + "," + String(quatJ[5], 2) + "," + String(quatK[5], 2) + "\r\n";
+            Serial.print(s);
+        //}
+        //for(uint8_t i = 0; i < c; i++)Serial.read();
+     //}
+}
+
 
 //************************************************************************
 //                COMMANDS

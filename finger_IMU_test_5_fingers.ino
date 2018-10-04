@@ -67,6 +67,7 @@ void setup() {
         //Serial.print(i);
     }
     initIndicate();
+    delay(1000);
 }
 
 
@@ -85,7 +86,21 @@ void getReadings(){
     //uint32_t t = millis();  
     for (uint8_t i = 2; i < 8; i++) {
         tcaselect(i);
-        get_QUAT(i);      
+//        if (wristIMU.dataAvailable() == true){
+//            //Serial.println(millis() - t);
+//            quatI[0 + i - 2] = wristIMU.getQuatI();
+//            quatJ[0 + i - 2] = wristIMU.getQuatJ();
+//            quatK[0 + i - 2] = wristIMU.getQuatK();
+//            quatReal[0 + i - 2] = wristIMU.getQuatReal();
+//        }
+//        else{
+//            errorControl(1, errorCount[1]++);
+//            //Serial.println("error");
+//        }
+        get_QUAT(i);
+        if(quatI[i - 2] == 0 && quatJ[i - 2] == 0 && quatK[i - 2] == 0){
+             errorControl(1, errorCount[1]++);      
+        }
     }
     //Serial.println(millis() - t);
     //Serial.println();
@@ -111,7 +126,9 @@ void get_QUAT(uint8_t i){
         cargo[j] = Wire.read();
         j++;
     }
-    if((cargo[9] == quat_report)){          //  && ((cargo[10]) == next_data_seqNum ) check for report and incrementing data seqNum
+
+    //Check to see if this packet is a sensor reporting its data to us
+    if((cargo[9] == quat_report) && (cargo[2] == 0x03) && (cargo[4] == 0xFB)){    //  && ((cargo[10]) == next_data_seqNum ) check for report and incrementing data seqNum
         //next_data_seqNum = ++cargo[10];                                           // predict next data seqNum              
         stat_ = cargo[11] & 0x03;                                                 // bits 1:0 contain the status (0,1,2,3)  
     
