@@ -39,6 +39,9 @@
 /*************************************
                 DEFINITIONS
  *************************************/
+
+
+
 //#define Simblee
 #define Nano
 
@@ -59,7 +62,7 @@ uint8_t stat_;                                     // Status (0-3)
                                
 
 const uint8_t quat_report        = 0x05;          // defines kind of rotation vector (0x05), geomagnetic (0x09), AR/VR (0x28),                                                 // without magnetometer : game rotation vector (0x08), AR/VR Game (0x29)
-const int reporting_frequency    = 200;            // reporting frequency in Hz  // note that serial output strongly reduces data rate
+const int reporting_frequency    = 400;           // reporting frequency in Hz  // note that serial output strongly reduces data rate
 
 const uint8_t B0_rate            = 1000000 / reporting_frequency;              //calculate LSB (byte 0)
 const uint8_t B1_rate            = B0_rate >> 8;                               //calculate byte 1
@@ -69,48 +72,58 @@ const uint8_t B1_rate            = B0_rate >> 8;                               /
 
 #define QP(n)                       (1.0f / (1 << n))                   // 1 << n ==  2^-n
 #define radtodeg                    (180.0f / PI)
+#define TCAADDR 0x70
 
-
+void tcaselect(uint8_t i) {
+    //if (i > 7) return;
+    Wire.beginTransmission(TCAADDR);
+    Wire.write(1 << i);
+    Wire.endTransmission();
+}
 
 /*************************************
                  SETUP
 *************************************/
 
 void setup() {
-
+  Serial.begin(115200);                  // 115200 baud
 // pin definitions
-  pinMode(Led, OUTPUT);
-  digitalWrite(Led, HIGH);               // initial state of LED = on
-  pinMode(btn_TARE, INPUT_PULLUP);
-  pinMode(btn_CAL, INPUT_PULLUP); 
+//  pinMode(Led, OUTPUT);
+//  digitalWrite(Led, HIGH);               // initial state of LED = on
+//  pinMode(btn_TARE, INPUT_PULLUP);
+//  pinMode(btn_CAL, INPUT_PULLUP); 
 
 
 // communication 
-  Serial.begin(115200);                  // 115200 baud
   
-  #ifdef Simblee 
-  Wire.speed = 400;  // select 400 kbps (100, 250)   // 
-  Wire.beginOnPins(5,6);               // (SCLpin,SDApin)
-  #endif
- 
-  #ifdef Nano
-  Wire.begin();                          // start I2C communication     
-  Wire.setClock(400000L);                // set I2C to 400kHz
-  #endif
   
-  Serial.println ("*********************************************************************");
-  Serial.println (" Rock bottom code for  BNO080 on Atmega 328p; Cortex M0 (Simblee) V1.0 2018-01-22");
-  Serial.println ("*********************************************************************");
+//  #ifdef Simblee 
+//  Wire.speed = 400;  // select 400 kbps (100, 250)   // 
+//  Wire.beginOnPins(5,6);               // (SCLpin,SDApin)
+//  #endif
+// 
+//  #ifdef Nano
+//  Wire.begin();                          // start I2C communication     
+//  Wire.setClock(400000L);                // set I2C to 400kHz
+//  #endif
+//  
+//  Serial.println ("*********************************************************************");
+//  Serial.println (" Rock bottom code for  BNO080 on Atmega 328p; Cortex M0 (Simblee) V1.0 2018-01-22");
+//  Serial.println ("*********************************************************************");
 
 // BNO settings
-  Wire.beginTransmission(BNO_ADDRESS);
-  while (Wire.endTransmission() != 0);         //wait until device is responding (32 kHz XTO running)
-  Serial.println("BNO found");
-    
-  delay(100);                            //needed to accept feature command; minimum not tested
-  set_feature_cmd_QUAT();                // set the required feature report data rate  are generated  at preset report interva 
-  ME_cal(1,1,1,0);                       // switch autocal on @ booting (otherwise gyro is not on)
-
+  Wire.begin();                          // start I2C communication     
+  Wire.setClock(400000L);                // set I2C to 400kHz
+  for (uint8_t i = 2; i < 8; i++) {
+      tcaselect(2);
+      Wire.beginTransmission(BNO_ADDRESS);
+      while (Wire.endTransmission() != 0);         //wait until device is responding (32 kHz XTO running)
+      Serial.println("BNO found");
+   
+      delay(100);                            //needed to accept feature command; minimum not tested
+      set_feature_cmd_QUAT();                // set the required feature report data rate  are generated  at preset report interva 
+      ME_cal(1,1,1,0);                       // switch autocal on @ booting (otherwise gyro is not on)
+  }
 }
 
 
