@@ -72,72 +72,73 @@ void setup() {
 
 
 void loop() {
-  /*if(Serial.available()){
-    int c = Serial.available();
-    for(uint8_t i = 0; i < c; i++)Serial.read();
-  }*/
-  getReadings();
-  listenForTrig();
-  //delay(10);
+    /*if(Serial.available()){
+      int c = Serial.available();
+      for(uint8_t i = 0; i < c; i++)Serial.read();
+    }*/
+    getReadings();
+    listenForTrig();
+    //delay(10);
 }
 
 void getReadings(){
-    uint32_t t = millis();  
+    //uint32_t t = millis();  
     for (uint8_t i = 2; i < 8; i++) {
         tcaselect(i);
-        get_QUAT(i);
-        //delay(10);
-        /*if (wristIMU.dataAvailable() == true){
-            Serial.println(millis() - t);
-            quatI[0 + i - 2] = wristIMU.getQuatI();
-            quatJ[0 + i - 2] = wristIMU.getQuatJ();
-            quatK[0 + i - 2] = wristIMU.getQuatK();
-            quatReal[0 + i - 2] = wristIMU.getQuatReal();
-        }
-        else{
-            errorControl(1, errorCount[1]++);
-            //Serial.println("error");
-        }*/
-        
+        get_QUAT(i);      
     }
-    Serial.println(millis() - t);
+    //Serial.println(millis() - t);
     //Serial.println();
 }
 
+//Unit responds with packet that contains the following:
+//shtpHeader[0:3]: First, a 4 byte header
+//shtpData[0:4]: Then a 5 byte timestamp of microsecond clicks since reading was taken
+//shtpData[5 + 0]: Then a feature report ID (0x01 for Accel, 0x05 for Rotation Vector)
+//shtpData[5 + 1]: Sequence number (See 6.5.18.2)
+//shtpData[5 + 2]: Status
+//shtpData[3]: Delay
+//shtpData[4:5]: i/accel x/gyro x/etc
+//shtpData[6:7]: j/accel y/gyro y/etc
+//shtpData[8:9]: k/accel z/gyro z/etc
+//shtpData[10:11]: real/gyro temp/etc
+//shtpData[12:13]: Accuracy estimate
+
 void get_QUAT(uint8_t i){                                                               
-    if (quat_report == 0x08 || quat_report == 0x29){
-        Wire.requestFrom(BNO_ADDRESS,21);
-        int i=0; 
-        while (Wire.available()){
-          cargo[i] = Wire.read();
-          i++;
-        }
-    } 
-    else{ 
-        Wire.requestFrom(BNO_ADDRESS,23);
-        int i=0; 
-        while (Wire.available()){
-            cargo[i] = Wire.read();
-            i++;
-        }
+    Wire.requestFrom(BNO_ADDRESS,23);
+    int j = 0; 
+    while (Wire.available()){
+        cargo[j] = Wire.read();
+        j++;
     }
     if((cargo[9] == quat_report)){          //  && ((cargo[10]) == next_data_seqNum ) check for report and incrementing data seqNum
         //next_data_seqNum = ++cargo[10];                                           // predict next data seqNum              
         stat_ = cargo[11] & 0x03;                                                 // bits 1:0 contain the status (0,1,2,3)  
     
-        quatI[i - 2] = (((int16_t)cargo[14] << 8) | cargo[13] ); 
-        quatJ[i - 2] = (((int16_t)cargo[16] << 8) | cargo[15] );
-        quatK[i - 2] = (((int16_t)cargo[18] << 8) | cargo[17] );
-        quatReal[i - 2] = (((int16_t)cargo[20] << 8) | cargo[19] ); 
+        float qI = (((int16_t)cargo[14] << 8) | cargo[13] ); 
+        float qJ = (((int16_t)cargo[16] << 8) | cargo[15] );
+        float qK = (((int16_t)cargo[18] << 8) | cargo[17] );
+        float qReal = (((int16_t)cargo[20] << 8) | cargo[19] ); 
 
-        quatReal[i - 2] *= QP(14); quatI[i - 2] *= QP(14); quatJ[i - 2] *= QP(14); quatK[i - 2] *= QP(14);                  // apply Q point (quats are already unity vector)
+        quatReal[i - 2] = qToFloat_(qReal, 14); //pow(2, 14 * -1);//QP(14); 
+        quatI[i - 2] = qToFloat_(qI, 14); //pow(2, 14 * -1);//QP(14); 
+        quatJ[i - 2] = qToFloat_(qJ, 14); //pow(2, 14 * -1);//QP(14); 
+        quatK[i - 2] = qToFloat_(qK, 14); //pow(2, 14 * -1);//QP(14);                  // apply Q point (quats are already unity vector)
 
-        if (quat_report == 0x05 || quat_report == 0x09 || quat_report == 0x28 ){  // heading accurracy only in some reports available
-            h_est = (((int16_t)cargo[22] << 8) | cargo[21] );                        // heading accurracy estimation  
-            h_est *= QP(12);                                                         // apply Q point 
-            h_est *= radtodeg;                                                       // convert to degrees                
-        }
+        //if (quat_report == 0x05){  // heading accurracy only in some reports available
+        h_est = (((int16_t)cargo[22] << 8) | cargo[21] );                        // heading accurracy estimation  
+        h_est *= QP(12);                                                         // apply Q point 
+        h_est *= radtodeg;                                                       // convert to degrees                
+        //}
     }
+}
+
+//Given a register value and a Q point, convert to float
+//See https://en.wikipedia.org/wiki/Q_(number_format)
+float qToFloat_(int16_t fixedPointValue, uint8_t qPoint){
+  float qFloat = fixedPointValue;
+  qFloat *= pow(2, qPoint * -1);
+  return (qFloat);
 }
 
 void listenForTrig(){
@@ -170,12 +171,14 @@ void listenForTrig(){
         //for(uint8_t i = 0; i < c; i++)Serial.read();
      //}
 }
+
 void errorControl(uint8_t i, uint8_t counter){
     if(counter > 5){
        initIMU(i);
        errorCount[i] = 0;
     }
 }
+
 void initIMU(uint8_t i){
     switch(i){
         case 1:

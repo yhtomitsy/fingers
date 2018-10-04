@@ -111,21 +111,21 @@ void loop() {
     uint32_t t = millis();
     for (uint8_t i = 2; i < 8; i++) {
         tcaselect(i);
-        Serial.print(i);Serial.print(" ");
+        //Serial.print(i);Serial.print(" ");
         //delay(100);
         get_QUAT();                                                                    // get actual QUAT data (if new are available)    
-//        if (millis() - plot_interval > 0){ 
-//            //Serial.print ("S "); Serial.print (stat_);
-//            //Serial.print ("; E "); Serial.print (h_est + 0.05f,1);                   // including rounding
-//            Serial.print ("; q0 "); Serial.print (q0 + 0.00005f,4);                  // = qw (more digits to find out north direction (y axis N --> q0 = 1)
-//            Serial.print ("; q1 "); Serial.print (q1 + 0.0005f,3);
-//            Serial.print ("; q2 "); Serial.print (q2 + 0.0005f,3);
-//            Serial.print ("; q3 "); Serial.println (q3 + 0.0005f,3);
-//            plot_interval = millis();
-//        }
+        if (millis() - plot_interval > 0){ 
+            //Serial.print ("S "); Serial.print (stat_);
+            //Serial.print ("; E "); Serial.print (h_est + 0.05f,1);                   // including rounding
+            Serial.print ("; q0 "); Serial.print (q0 + 0.00005f,4);                  // = qw (more digits to find out north direction (y axis N --> q0 = 1)
+            Serial.print ("; q1 "); Serial.print (q1 + 0.0005f,3);
+            Serial.print ("; q2 "); Serial.print (q2 + 0.0005f,3);
+            Serial.print ("; q3 "); Serial.println (q3 + 0.0005f,3);
+            plot_interval = millis();
+        }
     }
-    //Serial.println(millis() - t);
-    Serial.println();                       
+    Serial.println(millis() - t);
+    //Serial.println();                       
 }
 
 /*************************************
@@ -152,11 +152,11 @@ void get_QUAT(){
       Wire.requestFrom(BNO_ADDRESS,23);
       int i=0; 
         while (Wire.available()){
-          Serial.print(".");
+          //Serial.print(".");
           cargo[i] = Wire.read();
           i++;
         }
-        Serial.println();
+        //Serial.println();
     }
     
     if((cargo[9] == quat_report)){        //&& ((cargo[10]) == next_data_seqNum ) check for report and incrementing data seqNum
@@ -175,10 +175,10 @@ void get_QUAT(){
           h_est *= QP(12);                                                         // apply Q point 
           h_est *= radtodeg;                                                       // convert to degrees                
        }
-       Serial.print ("; q0 "); Serial.print (q0 + 0.00005f,4);                  // = qw (more digits to find out north direction (y axis N --> q0 = 1)
-       Serial.print ("; q1 "); Serial.print (q1 + 0.0005f,3);
-       Serial.print ("; q2 "); Serial.print (q2 + 0.0005f,3);
-       Serial.print ("; q3 "); Serial.println (q3 + 0.0005f,3);
+//       Serial.print ("; q0 "); Serial.print (q0 + 0.00005f,4);                  // = qw (more digits to find out north direction (y axis N --> q0 = 1)
+//       Serial.print ("; q1 "); Serial.print (q1 + 0.0005f,3);
+//       Serial.print ("; q2 "); Serial.print (q2 + 0.0005f,3);
+//       Serial.print ("; q3 "); Serial.println (q3 + 0.0005f,3);
     }
 }
 
