@@ -86,44 +86,21 @@ void tcaselect(uint8_t i) {
 *************************************/
 
 void setup() {
-  Serial.begin(115200);                  // 115200 baud
-// pin definitions
-//  pinMode(Led, OUTPUT);
-//  digitalWrite(Led, HIGH);               // initial state of LED = on
-//  pinMode(btn_TARE, INPUT_PULLUP);
-//  pinMode(btn_CAL, INPUT_PULLUP); 
-
-
-// communication 
-  
-  
-//  #ifdef Simblee 
-//  Wire.speed = 400;  // select 400 kbps (100, 250)   // 
-//  Wire.beginOnPins(5,6);               // (SCLpin,SDApin)
-//  #endif
-// 
-//  #ifdef Nano
-//  Wire.begin();                          // start I2C communication     
-//  Wire.setClock(400000L);                // set I2C to 400kHz
-//  #endif
-//  
-//  Serial.println ("*********************************************************************");
-//  Serial.println (" Rock bottom code for  BNO080 on Atmega 328p; Cortex M0 (Simblee) V1.0 2018-01-22");
-//  Serial.println ("*********************************************************************");
-
+  Serial.begin(2000000);                  // 115200 baud
 // BNO settings
   Wire.begin();                          // start I2C communication     
   Wire.setClock(400000L);                // set I2C to 400kHz
   for (uint8_t i = 2; i < 8; i++) {
-      tcaselect(2);
+      tcaselect(i);
       Wire.beginTransmission(BNO_ADDRESS);
       while (Wire.endTransmission() != 0);         //wait until device is responding (32 kHz XTO running)
       Serial.println("BNO found");
    
-      delay(100);                            //needed to accept feature command; minimum not tested
+      delay(1000);                            //needed to accept feature command; minimum not tested
       set_feature_cmd_QUAT();                // set the required feature report data rate  are generated  at preset report interva 
       ME_cal(1,1,1,0);                       // switch autocal on @ booting (otherwise gyro is not on)
   }
+  Serial.println("done");
 }
 
 
@@ -131,46 +108,25 @@ void setup() {
                      LOOP
    *************************************/
 void loop() {
-
- get_QUAT();                           // get actual QUAT data (if new are available)
-  
- if (millis() - plot_interval > 0){ 
-        Serial.print ("S "); Serial.print (stat_);
-        Serial.print ("; E "); Serial.print (h_est + 0.05f,1);                   // including rounding
-        Serial.print ("; q0 "); Serial.print (q0 + 0.00005f,4);                  // = qw (more digits to find out north direction (y axis N --> q0 = 1)
-        Serial.print ("; q1 "); Serial.print (q1 + 0.0005f,3);
-        Serial.print ("; q2 "); Serial.print (q2 + 0.0005f,3);
-        Serial.print ("; q3 "); Serial.println (q3 + 0.0005f,3);
-        plot_interval = millis();
- }
- 
-                           
-  if (stat_ == 3)  digitalWrite(Led, !digitalRead(Led));                   // blink Led every loop run (--> to measure loop duration);             
-  else digitalWrite(Led, LOW);                                            // status Led 
-
-
-// *************  buttons *******************************
-  
-  if(digitalRead(btn_TARE) == LOW ){                        // button pressed  stores actual phi as mean value and saves actual calibration to flash
-    delay(200);
-    while(digitalRead(btn_TARE) == LOW);                    // wait for button release
-    //actions follow  here
-    TARE();                                                 
-   }    
-
-
-   if(digitalRead(btn_CAL) == LOW){
-     delay(200);
-     while(digitalRead(btn_CAL) == LOW );       // wait for button release
-    
-     //actions follow here
-     save_DCD();                                     // store cal in flash
-     delay(200);
-     ME_cal(0,0,1,0);                                //autocal acc + gyro stop; magnetometer  cal continues
+    uint32_t t = millis();
+    for (uint8_t i = 2; i < 8; i++) {
+        tcaselect(i);
+        Serial.print(i);Serial.print(" ");
+        //delay(100);
+        get_QUAT();                                                                    // get actual QUAT data (if new are available)    
+//        if (millis() - plot_interval > 0){ 
+//            //Serial.print ("S "); Serial.print (stat_);
+//            //Serial.print ("; E "); Serial.print (h_est + 0.05f,1);                   // including rounding
+//            Serial.print ("; q0 "); Serial.print (q0 + 0.00005f,4);                  // = qw (more digits to find out north direction (y axis N --> q0 = 1)
+//            Serial.print ("; q1 "); Serial.print (q1 + 0.0005f,3);
+//            Serial.print ("; q2 "); Serial.print (q2 + 0.0005f,3);
+//            Serial.print ("; q3 "); Serial.println (q3 + 0.0005f,3);
+//            plot_interval = millis();
+//        }
     }
- //*******************************************************
-
-}                                                    // loop ends here
+    //Serial.println(millis() - t);
+    Serial.println();                       
+}
 
 /*************************************
              Subroutines
@@ -183,25 +139,28 @@ void loop() {
 
 
 void get_QUAT(){                                                               
-  if (quat_report == 0x08 || quat_report == 0x29){
-    Wire.requestFrom(BNO_ADDRESS,21);
-    int i=0; 
-    while (Wire.available()){
-      cargo[i] = Wire.read();
-      i++;
-    }
-  }
-   
-  else{ 
-    Wire.requestFrom(BNO_ADDRESS,23);
-    int i=0; 
+    if (quat_report == 0x08 || quat_report == 0x29){
+      Wire.requestFrom(BNO_ADDRESS,21);
+      int i=0; 
       while (Wire.available()){
-      cargo[i] = Wire.read();
-      i++;
+        cargo[i] = Wire.read();
+        i++;
       }
-  }
-      if((cargo[9] == quat_report) && ((cargo[10]) == next_data_seqNum )){      // check for report and incrementing data seqNum
-        next_data_seqNum = ++cargo[10];                                         // predict next data seqNum              
+    }
+     
+    else{ 
+      Wire.requestFrom(BNO_ADDRESS,23);
+      int i=0; 
+        while (Wire.available()){
+          Serial.print(".");
+          cargo[i] = Wire.read();
+          i++;
+        }
+        Serial.println();
+    }
+    
+    if((cargo[9] == quat_report)){        //&& ((cargo[10]) == next_data_seqNum ) check for report and incrementing data seqNum
+        //next_data_seqNum = ++cargo[10];                                         // predict next data seqNum              
         stat_ = cargo[11] & 0x03;                                                // bits 1:0 contain the status (0,1,2,3)  
     
         q1 = (((int16_t)cargo[14] << 8) | cargo[13] ); 
@@ -212,13 +171,15 @@ void get_QUAT(){
         q0 *= QP(14); q1 *= QP(14); q2 *= QP(14); q3 *= QP(14);                  // apply Q point (quats are already unity vector)
 
        if (quat_report == 0x05 || quat_report == 0x09 || quat_report == 0x28 ){  // heading accurracy only in some reports available
-        h_est = (((int16_t)cargo[22] << 8) | cargo[21] );                        // heading accurracy estimation  
-        h_est *= QP(12);                                                         // apply Q point 
-        h_est *= radtodeg;                                                       // convert to degrees                
+          h_est = (((int16_t)cargo[22] << 8) | cargo[21] );                        // heading accurracy estimation  
+          h_est *= QP(12);                                                         // apply Q point 
+          h_est *= radtodeg;                                                       // convert to degrees                
        }
-       
-      
-      }
+       Serial.print ("; q0 "); Serial.print (q0 + 0.00005f,4);                  // = qw (more digits to find out north direction (y axis N --> q0 = 1)
+       Serial.print ("; q1 "); Serial.print (q1 + 0.0005f,3);
+       Serial.print ("; q2 "); Serial.print (q2 + 0.0005f,3);
+       Serial.print ("; q3 "); Serial.println (q3 + 0.0005f,3);
+    }
 }
 
 //************************************************************************
