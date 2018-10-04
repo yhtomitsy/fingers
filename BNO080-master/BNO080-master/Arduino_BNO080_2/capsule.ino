@@ -75,3 +75,48 @@
 //       Serial.print ("; q3 "); Serial.println (q3 + 0.0005f,3);
     }
 }*/
+
+/*if (millis() - plot_interval > 0){ 
+            //Serial.print ("S "); Serial.print (stat_);
+            //Serial.print ("; E "); Serial.print (h_est + 0.05f,1);                   // including rounding
+            Serial.print ("; q0 "); Serial.print (q0 + 0.00005f,4);                  // = qw (more digits to find out north direction (y axis N --> q0 = 1)
+            Serial.print ("; q1 "); Serial.print (q1 + 0.0005f,3);
+            Serial.print ("; q2 "); Serial.print (q2 + 0.0005f,3);
+            Serial.print ("; q3 "); Serial.println (q3 + 0.0005f,3);
+            plot_interval = millis();
+        }*/
+
+
+/* Utilities (Quaternion mathematics)
+ 
+  q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3  = 1
+   
+ // Gravity vector from quaternions
+  
+  gx = q1 * q3 - q0 * q2;
+  gy = q0 * q1 + q2 * q3;
+  gz = q0 * q0 + q3 * q3 -0.5f; 
+  norm = sqrtf(gx + gx + gy * gy + gz * gz);                                                              
+  norm = 1.0f / norm;
+  gx *= norm; gy *= norm; gz *= norm;
+ 
+ // Euler angles from quaternions (radians)   
+
+  yaw   =  atan2((q1 * q2 + q0 * q3), ((q0 * q0 + q1 * q1) - 0.5f));   
+  pitch = -asin(2.0f * (q1 * q3 - q0 * q2));
+  roll  =  atan2((q0 * q1 + q2 * q3), ((q0 * q0 + q3 * q3) - 0.5f));
+  yaw *= radtodeg;    pitch *= radtodeg;    roll *= radtodeg; 
+    
+ # Rotation matrix (half)
+ 
+ R00 = q1 * q1 + q2 * q2 -0.5f; // = 0.5f - q3 * q3 - q4 * q4;
+ R01 = q2 * q3 - q1 * q4;
+ R02 = q2 * q4 + q1 * q3;
+ R10 = q2 * q3 + q1 * q4;
+ R11 = q1 * q1 + q3 * q3 -0.5; // = 0.5f - q2 * q2 - q4 * q4;
+ R12 = q3 * q4 - q1 * q2;
+ R20 = q2 * q4 - q1 * q3;
+ R21 = q3 * q4 + q1 * q2;
+ R22 = q1 * q1 + q4 * q4 -0.5f; // = 0.5f -q2 * q2 -q3 * q3;
+
+*/

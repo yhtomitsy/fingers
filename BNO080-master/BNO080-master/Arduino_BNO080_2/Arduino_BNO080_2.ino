@@ -89,50 +89,45 @@ void tcaselect(uint8_t i) {
 
 void setup() {
   Serial.begin(2000000);                  // 115200 baud
-// BNO settings
   Wire.begin();                          // start I2C communication     
   Wire.setClock(400000L);                // set I2C to 400kHz
   for (uint8_t i = 2; i < 8; i++) {
       tcaselect(i);
-      Wire.beginTransmission(BNO_ADDRESS);
-      while (Wire.endTransmission() != 0);         //wait until device is responding (32 kHz XTO running)
-      //Serial.println("BNO found");
-      delay(1000);                           //needed to accept feature command; minimum not tested
-      set_feature_cmd_QUAT();                // set the required feature report data rate  are generated  at preset report interva 
-      ME_cal(1,1,1,0);                       // switch autocal on @ booting (otherwise gyro is not on)
+      initializeIMU();
   }
-  Serial.println("done");
+  initIndicate();
+  delay(1000);
 }
 
-
-  /*************************************
-                     LOOP
-   *************************************/
 void loop() {
     //uint32_t t = millis();
     for (uint8_t i = 2; i < 8; i++) {
         tcaselect(i);
-        //Serial.print(i);Serial.print(" ");
-        //delay(100);
         get_QUAT(i);                                                                    // get actual QUAT data (if new are available)    
-        /*if (millis() - plot_interval > 0){ 
-            //Serial.print ("S "); Serial.print (stat_);
-            //Serial.print ("; E "); Serial.print (h_est + 0.05f,1);                   // including rounding
-            Serial.print ("; q0 "); Serial.print (q0 + 0.00005f,4);                  // = qw (more digits to find out north direction (y axis N --> q0 = 1)
-            Serial.print ("; q1 "); Serial.print (q1 + 0.0005f,3);
-            Serial.print ("; q2 "); Serial.print (q2 + 0.0005f,3);
-            Serial.print ("; q3 "); Serial.println (q3 + 0.0005f,3);
-            plot_interval = millis();
-        }*/
+        if(quatI[i - 2] == 0 && quatJ[i - 2] == 0 && quatK[i - 2] == 0){
+            initializeIMU();
+        }
     }
     listenForTrig();
-    //Serial.println(1000 / (millis() - t));
-    //Serial.println();                       
+    //Serial.println(1000 / (millis() - t));                      
 }
 
-/*************************************
-             Subroutines
-/*************************************/
+void initIndicate(){
+   for(uint8_t i = 0; i < 10; i++){
+        digitalWrite(13, HIGH);
+        delay(50);
+        digitalWrite(13, LOW);
+        delay(50);
+    }
+}
+
+void initializeIMU(){
+    Wire.beginTransmission(BNO_ADDRESS);
+    while (Wire.endTransmission() != 0);         //wait until device is responding (32 kHz XTO running)
+    //Serial.println("BNO found");
+    delay(100);                           //needed to accept feature command; minimum not tested
+    set_feature_cmd_QUAT();                // set the required feature report data rate  are generated  at preset report interva 
+}
 
 //Unit responds with packet that contains the following:
 //shtpHeader[0:3]: First, a 4 byte header
@@ -191,20 +186,6 @@ void listenForTrig(){
     //if( c > 0){
         //char c = Serial.read();
         //if(c == '*'){
-            /*String s = "$," +String(quatReal[0], 2) + "," + String(quatI[0], 2) + "," + String(quatJ[0], 2) + "," + String(quatK[0], 2);
-            for(uint8_t i = 0; i < 6; i++){
-                  s += "," + String(roll[i], 2); 
-            }
-            for(uint8_t i = 0; i < 6; i++){
-                  s += "," + String(yaw[i], 2);
-            }
-            s += "\r";*/
-            /*String s = "$," +String(quatReal[0], 2) + "," + String(quatI[0], 2) + "," + String(quatJ[0], 2) + "," + String(quatK[0], 2)
-                       + "," + String(quatReal[1], 2) + "," + String(quatI[1], 2) + "," + String(quatJ[1], 2) + "," + String(quatK[1], 2)
-                       + "," + String(quatReal[2], 2) + "," + String(quatI[2], 2) + "," + String(quatJ[2], 2) + "," + String(quatK[2], 2)
-                       + "," + String(quatReal[3], 2) + "," + String(quatI[3], 2) + "," + String(quatJ[3], 2) + "," + String(quatK[3], 2)
-                       + "," + String(quatReal[4], 2) + "," + String(quatI[4], 2) + "," + String(quatJ[4], 2) + "," + String(quatK[4], 2)
-                       + "," + String(quatReal[5], 2) + "," + String(quatI[5], 2) + "," + String(quatJ[5], 2) + "," + String(quatK[5], 2) + "\r\n";*/
             String s = String(quatReal[0], 2) + "," + String(quatI[0], 2) + "," + String(quatJ[0], 2) + "," + String(quatK[0], 2)
                        + "," + String(quatReal[1], 2) + "," + String(quatI[1], 2) + "," + String(quatJ[1], 2) + "," + String(quatK[1], 2)
                        + "," + String(quatReal[2], 2) + "," + String(quatI[2], 2) + "," + String(quatJ[2], 2) + "," + String(quatK[2], 2)
@@ -239,14 +220,13 @@ void set_feature_cmd_QUAT(){                                 // quat_report dete
 */
 
 void TARE(){
-  uint8_t tare_now[16] = {16,0,2,0,0xF2,0,0x03,0,0x07,0,0,0,0,0,0,0};                //0x07 means all axes 0x04 = Z axis only; based on rotation vector
-  uint8_t tare_persist[16] = {16,0,2,0,0xF2,0,0x03,0x01,0,0,0,0,0,0,0,0};
-  Wire.beginTransmission(BNO_ADDRESS);
-  Wire.write(tare_now, sizeof(tare_now));
-  //Wire.write(tare_persist, sizeof(tare_persist));                                  // uncomment  for tare persist;
-  Wire.endTransmission();              
- 
- }
+    uint8_t tare_now[16] = {16,0,2,0,0xF2,0,0x03,0,0x07,0,0,0,0,0,0,0};                //0x07 means all axes 0x04 = Z axis only; based on rotation vector
+    uint8_t tare_persist[16] = {16,0,2,0,0xF2,0,0x03,0x01,0,0,0,0,0,0,0,0};
+    Wire.beginTransmission(BNO_ADDRESS);
+    Wire.write(tare_now, sizeof(tare_now));
+    //Wire.write(tare_persist, sizeof(tare_persist));                                  // uncomment  for tare persist;
+    Wire.endTransmission();              
+}
 
 //***********************************************************************************************************************************************
 /* The calibration data in RAM is always updated in background. 'Save DCD'  push the RAM record into the FLASH for reload @ next boot.
@@ -276,37 +256,3 @@ void ME_cal(uint8_t P0, uint8_t P1, uint8_t P2, uint8_t P4){
 }
 
 //***********************************************************************************************************************************************
-
-/* Utilities (Quaternion mathematics)
- 
-  q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3  = 1
-   
- // Gravity vector from quaternions
-  
-  gx = q1 * q3 - q0 * q2;
-  gy = q0 * q1 + q2 * q3;
-  gz = q0 * q0 + q3 * q3 -0.5f; 
-  norm = sqrtf(gx + gx + gy * gy + gz * gz);                                                              
-  norm = 1.0f / norm;
-  gx *= norm; gy *= norm; gz *= norm;
- 
- // Euler angles from quaternions (radians)   
-
-  yaw   =  atan2((q1 * q2 + q0 * q3), ((q0 * q0 + q1 * q1) - 0.5f));   
-  pitch = -asin(2.0f * (q1 * q3 - q0 * q2));
-  roll  =  atan2((q0 * q1 + q2 * q3), ((q0 * q0 + q3 * q3) - 0.5f));
-  yaw *= radtodeg;    pitch *= radtodeg;    roll *= radtodeg; 
-    
- # Rotation matrix (half)
- 
- R00 = q1 * q1 + q2 * q2 -0.5f; // = 0.5f - q3 * q3 - q4 * q4;
- R01 = q2 * q3 - q1 * q4;
- R02 = q2 * q4 + q1 * q3;
- R10 = q2 * q3 + q1 * q4;
- R11 = q1 * q1 + q3 * q3 -0.5; // = 0.5f - q2 * q2 - q4 * q4;
- R12 = q3 * q4 - q1 * q2;
- R20 = q2 * q4 - q1 * q3;
- R21 = q3 * q4 + q1 * q2;
- R22 = q1 * q1 + q4 * q4 -0.5f; // = 0.5f -q2 * q2 -q3 * q3;
-
-*/
